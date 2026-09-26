@@ -148,17 +148,70 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
+exports.deleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || id === "undefined" || id === "null") {
+      return res.status(400).json({ message: "Invalid Order ID provided" });
+    }
+
+    const order = await Order.findByIdAndDelete(id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    res.json({ message: "Order deleted successfully", orderId: order._id });
+  } catch (err) {
+    console.error("Delete order error:", err);
+    res.status(500).json({ message: err.message || "Failed to delete order" });
+  }
+};
+
+exports.deleteUserOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      user: req.user._id
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    if (!["Delivered", "Cancelled"].includes(order.status)) {
+      return res.status(400).json({
+        message: "Only delivered or cancelled orders can be deleted"
+      });
+    }
+
+    await order.deleteOne();
+    res.json({ message: "Order removed from order history", orderId: order._id });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 
 
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    const validStatuses = ["Processing", "Confirmed", "Shipped", "Delivered", "Cancelled"];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid order status" });
+    }
 
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { status },
       { new: true }
     );
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
     res.json(order);
   } catch (err) {
